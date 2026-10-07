@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="robots" content="noindex">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d12">
+<title>JF Go · Something dropped nearby</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--blue:#2f6bff;--gold:#ffc83d;--ink:#0b0d12;--sub:#6b7280;--card:#fff;--safe-b:env(safe-area-inset-bottom);--safe-t:env(safe-area-inset-top)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--ink);color:#fff;font:16px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;overflow:hidden;overscroll-behavior:none}
+button{font:inherit;border:0;cursor:pointer}
+.screen{position:fixed;inset:0;display:none}
+.screen.on{display:block}
+/* intro */
+#intro{background:radial-gradient(120% 70% at 50% 30%,#1b2440 0%,#0b0d12 70%)}
+#intro .wrap{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:24px 22px calc(28px + var(--safe-b))}
+#introBeam{position:absolute;left:50%;top:0;width:180px;height:62%;transform:translateX(-50%);pointer-events:none}
+.kicker{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
+h1{font-size:34px;line-height:1.08;margin:8px 0 10px;font-weight:700;letter-spacing:-.02em}
+.lead{color:#c9cfdb;font-size:17px;margin:0 0 22px}
+.lead b{color:#fff}
+.cta{width:100%;height:56px;border-radius:16px;background:#fff;color:var(--ink);font-weight:650;font-size:17px}
+.cta.blue{background:var(--blue);color:#fff}
+.cta.gold{background:var(--gold);color:#1a1300}
+.cta:disabled{opacity:.45}
+.fine{margin:12px 2px 0;color:#8a93a6;font-size:13px;text-align:center}
+/* hunt */
+#hunt{background:#eef0f4;color:var(--ink)}
+#map{position:absolute;inset:0 0 auto 0;height:58%}
+#huntCard{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:24px 24px 0 0;padding:20px 20px calc(20px + var(--safe-b));box-shadow:0 -10px 30px rgba(0,0,0,.08);min-height:44%}
+.row{display:flex;align-items:center;gap:16px}
+#arrowWrap{width:76px;height:76px;border-radius:50%;background:#f2f4f8;display:grid;place-items:center;flex:none}
+#arrow{width:40px;height:40px;transition:transform .25s linear}
+#dist{font-size:40px;font-weight:700;letter-spacing:-.03em;line-height:1}
+#distSub{color:var(--sub);font-size:15px;margin-top:4px}
+.stats{display:flex;gap:10px;margin:18px 0 16px}
+.stat{flex:1;background:#f5f6f9;border-radius:14px;padding:10px 12px}
+.stat b{display:block;font-size:20px;letter-spacing:-.02em}
+.stat span{font-size:12px;color:var(--sub)}
+#huntHint{color:var(--sub);font-size:14px;margin:0 0 14px;min-height:19px}
+.mapBtn{position:absolute;top:calc(12px + var(--safe-t));right:12px;z-index:500;width:40px;height:40px;border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15);display:grid;place-items:center}
+.me-dot{width:18px;height:18px;border-radius:50%;background:var(--blue);border:3px solid #fff;box-shadow:0 0 0 6px rgba(47,107,255,.2)}
+.drop-pin{width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,#fff6d6 0%,#ffc83d 45%,rgba(255,200,61,0) 70%);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(.85);opacity:.85}50%{transform:scale(1.25);opacity:1}}
+/* camera */
+#cam{background:#000}
+#video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#overlay{position:absolute;inset:0;width:100%;height:100%}
+#camTop{position:absolute;left:0;right:0;top:0;padding:calc(14px + var(--safe-t)) 16px 30px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,0))}
+#camDist{font-size:22px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+#camDist small{display:block;font-size:13px;font-weight:500;color:#dfe3ea}
+.x{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.22);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:grid;place-items:center;flex:none}
+#camHint{position:absolute;left:16px;right:16px;bottom:calc(30px + var(--safe-b));text-align:center;font-size:17px;font-weight:600;text-shadow:0 1px 8px rgba(0,0,0,.7)}
+.edge{position:absolute;top:50%;width:54px;height:54px;margin-top:-27px;display:none;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5))}
+#edgeL{left:10px}#edgeR{right:10px}
+#bell{position:absolute;left:0;top:0;width:150px;height:150px;margin:-75px 0 0 -75px;display:none;perspective:600px;touch-action:manipulation}
+#bell .spin{width:100%;height:100%;animation:bob 2.2s ease-in-out infinite}
+#bell svg{width:100%;height:100%;animation:turn 2.6s ease-in-out infinite alternate;filter:drop-shadow(0 0 18px rgba(255,210,90,.95)) drop-shadow(0 8px 10px rgba(0,0,0,.35))}
+#bell .tap{position:absolute;left:50%;bottom:-30px;transform:translateX(-50%);white-space:nowrap;font-size:13px;font-weight:700;color:#1a1300;background:var(--gold);padding:5px 10px;border-radius:9px;opacity:0;transition:opacity .3s}
+#bell.ready .tap{opacity:1}
+@keyframes bob{0%,100%{transform:translateY(-6px)}50%{transform:translateY(6px)}}
+@keyframes turn{0%{transform:rotateY(-38deg) rotateZ(-6deg)}100%{transform:rotateY(38deg) rotateZ(6deg)}}
+#flash{position:absolute;inset:0;background:radial-gradient(circle at var(--fx,50%) var(--fy,50%),#fff 0%,rgba(255,236,170,.9) 25%,rgba(255,200,61,0) 70%);opacity:0;pointer-events:none}
+#flash.go{animation:flash .9s ease-out forwards}
+@keyframes flash{0%{opacity:0}15%{opacity:1}100%{opacity:0}}
+#fly{position:absolute;width:150px;height:150px;margin:-75px 0 0 -75px;display:none;pointer-events:none}
+/* reward */
+#reward{position:absolute;left:14px;right:14px;bottom:calc(16px + var(--safe-b));background:rgba(255,255,255,.97);color:var(--ink);border-radius:26px;padding:22px 20px 18px;transform:translateY(130%);transition:transform .55s cubic-bezier(.2,1.2,.3,1)}
+#reward.on{transform:none}
+#reward .badge{width:84px;height:84px;margin:-64px auto 8px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6d1,#ffc83d 60%,#e09a00);display:grid;place-items:center;box-shadow:0 10px 30px rgba(255,180,0,.45)}
+#reward h2{text-align:center;margin:4px 0 2px;font-size:24px;letter-spacing:-.02em}
+#reward p{text-align:center;color:var(--sub);margin:0 0 16px}
+#reward .stats{margin:0 0 16px}
+#reward .two{display:flex;gap:10px}
+#reward .two .cta{height:50px;font-size:16px}
+#reward .ghost{background:#f1f3f7;color:var(--ink)}
+#err{position:fixed;left:12px;right:12px;top:calc(12px + var(--safe-t));z-index:9999;background:#fff;color:#b00020;border-radius:14px;padding:12px 14px;font-size:14px;display:none;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.leaflet-control-attribution{font-size:9px}
+</style>
+</head>
+<body>
+
+<div id="err"></div>
+
+<!-- 1. the notification landing -->
+<section id="intro" class="screen on">
+  <canvas id="introBeam"></canvas>
+  <div class="wrap">
+    <div class="kicker">JF Go</div>
+    <h1 id="introTitle">Jamie, something dropped nearby</h1>
+    <p class="lead" id="introLead">A <b>Golden Dumbbell</b> just landed in a park close to you. Walk to it, find the beam of light through your camera and grab it.</p>
+    <button class="cta gold" id="startBtn">Start the hunt</button>
+    <p class="fine">Uses your location, compass and camera. Nothing is saved to JF Coach.</p>
+  </div>
+</section>
+
+<!-- 2. walk there -->
+<section id="hunt" class="screen">
+  <div id="map"></div>
+  <button class="mapBtn" id="recenter" aria-label="Recenter"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0b0d12" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+  <div id="huntCard">
+    <div class="row">
+      <div id="arrowWrap"><svg id="arrow" viewBox="0 0 40 40"><path d="M20 3 L32 34 L20 27 L8 34 Z" fill="#2f6bff"/></svg></div>
+      <div>
+        <div id="dist">…</div>
+        <div id="distSub">Finding you</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="sWalked">0 m</b><span>walked</span></div>
+      <div class="stat"><b id="sSteps">0</b><span>steps (about)</span></div>
+      <div class="stat"><b id="sTime">0:00</b><span>since the drop</span></div>
+    </div>
+    <p id="huntHint">The arrow points to the drop. Hold your phone flat.</p>
+    <button class="cta blue" id="camBtn">Open camera</button>
+  </div>
+</section>
+
+<!-- 3. AR camera -->
+<section id="cam" class="screen">
+  <video id="video" playsinline muted autoplay></video>
+  <canvas id="overlay"></canvas>
+  <div id="flash"></div>
+  <svg class="edge" id="edgeL" viewBox="0 0 54 54"><circle cx="27" cy="27" r="26" fill="rgba(0,0,0,.35)"/><path d="M32 14 L18 27 L32 40" stroke="#ffc83d" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <svg class="edge" id="edgeR" viewBox="0 0 54 54"><circle cx="27" cy="27" r="26" fill="rgba(0,0,0,.35)"/><path d="M22 14 L36 27 L22 40" stroke="#ffc83d" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div id="bell"><div class="spin"><svg viewBox="0 0 200 200" id="bellSvg"></svg></div><div class="tap">Tap to grab</div></div>
+  <div id="fly"><svg viewBox="0 0 200 200" id="flySvg"></svg></div>
+  <div id="camTop">
+    <div id="camDist">… <small>to the drop</small></div>
+    <button class="x" id="camClose" aria-label="Close camera"><svg width="14" height="14" viewBox="0 0 14 14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
+  </div>
+  <div id="camHint">Turn around until you see the light</div>
+  <div id="reward">
+    <div class="badge"><svg width="56" height="56" viewBox="0 0 200 200" id="badgeSvg"></svg></div>
+    <h2>Golden Dumbbell collected</h2>
+    <p id="rewardSub">+25 JF Go points</p>
+    <div class="stats">
+      <div class="stat"><b id="rWalked">0 m</b><span>walked</span></div>
+      <div class="stat"><b id="rSteps">0</b><span>steps (about)</span></div>
+      <div class="stat"><b id="rTime">0:00</b><span>to find it</span></div>
+    </div>
+    <div class="two">
+      <button class="cta ghost" id="doneBtn">Done</button>
+      <button class="cta gold" id="againBtn">Drop another</button>
+    </div>
+  </div>
+</section>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="parks.js"></script>
+<script>
+(function () {
+'use strict';
+var Q = new URLSearchParams(location.search);
+var SIM = Q.get('sim') === '1';
+var WHO = Q.get('who') || 'Jamie';
+var R = 6371000;
+var CAMERA_H = 1.5;          // metres, phone height
+var HFOV = 52, VFOV = 70;    // portrait back camera, degrees (approx)
+var BELL_SHOW_M = 45, CATCH_M = 25;
+
+function $(id) { return document.getElementById(id); }
+function rad(d) { return d * Math.PI / 180; }
+function deg(r) { return r * 180 / Math.PI; }
+function dist(a, b) {
+  var p1 = rad(a.lat), p2 = rad(b.lat), dl = rad(b.lng - a.lng), dp = p2 - p1;
+  var x = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+function bearing(a, b) {
+  var p1 = rad(a.lat), p2 = rad(b.lat), dl = rad(b.lng - a.lng);
+  return (deg(Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl))) + 360) % 360;
+}
+function offset(p, brg, m) {
+  var d = m / R, b = rad(brg), p1 = rad(p.lat), l1 = rad(p.lng);
+  var p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
+  var l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+  return { lat: deg(p2), lng: deg(l2) };
+}
+function angDiff(a, b) { var d = ((a - b) % 360 + 540) % 360 - 180; return d; }
+function fmtM(m) { return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m'; }
+function fmtT(ms) { var s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
+function steps(m) { return Math.round(m * 1.32); }
+function err(t) { var e = $('err'); e.textContent = t; e.style.display = 'block'; clearTimeout(err.t); err.t = setTimeout(function () { e.style.display = 'none'; }, 6000); }
+
+/* ---------- state ---------- */
+var S = {
+  drop: null, park: Q.get('n') || '', me: null, acc: 999, heading: null, beta: 90,
+  walked: 0, lastFix: null, startAt: Date.now(), screen: 'intro', collected: false, course: null
+};
+var dp = (Q.get('d') || '').split(',').map(Number);
+if (dp.length === 2 && isFinite(dp[0]) && isFinite(dp[1])) S.drop = { lat: dp[0], lng: dp[1] };
+var t0 = Number(Q.get('t'));
+if (t0 > 1e12) S.startAt = t0;
+
+/* ---------- dumbbell art ---------- */
+var BELL = '<defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3c4"/><stop offset=".45" stop-color="#ffc83d"/><stop offset="1" stop-color="#c98700"/></linearGradient>' +
+  '<linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffbe8"/><stop offset="1" stop-color="#e2a200"/></linearGradient></defs>' +
+  '<rect x="56" y="92" width="88" height="16" rx="6" fill="url(#g2)"/>' +
+  '<rect x="30" y="58" width="26" height="84" rx="9" fill="url(#g1)"/><rect x="144" y="58" width="26" height="84" rx="9" fill="url(#g1)"/>' +
+  '<rect x="14" y="72" width="18" height="56" rx="7" fill="url(#g1)"/><rect x="168" y="72" width="18" height="56" rx="7" fill="url(#g1)"/>' +
+  '<rect x="36" y="64" width="6" height="64" rx="3" fill="#fff" opacity=".55"/><rect x="150" y="64" width="6" height="64" rx="3" fill="#fff" opacity=".55"/>' +
+  '<text x="100" y="104" text-anchor="middle" font-family="-apple-system,system-ui" font-weight="800" font-size="12" fill="#7a5200">JF</text>';
+['bellSvg', 'flySvg', 'badgeSvg'].forEach(function (id) { $(id).innerHTML = BELL.replace(/\bg([12])\b/g, id + '$1'); });
+
+/* ---------- intro beam ---------- */
+(function introBeam() {
+  var c = $('introBeam'), x = c.getContext('2d');
+  function size() { c.width = c.clientWidth * 2; c.height = c.clientHeight * 2; }
+  size(); addEventListener('resize', size);
+  var parts = [];
+  (function f(t) {
+    if (S.screen !== 'intro') return requestAnimationFrame(f);
+    var w = c.width, h = c.height; x.clearRect(0, 0, w, h);
+    drawBeam(x, w / 2, h, w * 0.32, h, 1, t, parts, 2);
+    requestAnimationFrame(f);
+  })(0);
+})();
+
+function drawBeam(x, cx, baseY, width, height, alpha, t, parts, scale) {
+  scale = scale || 1;
+  x.save();
+  x.globalCompositeOperation = 'lighter';
+  var top = baseY - height;
+  var pulse = 0.85 + 0.15 * Math.sin(t / 380);
+  // outer glow
+  var g = x.createLinearGradient(cx - width * 1.6, 0, cx + width * 1.6, 0);
+  g.addColorStop(0, 'rgba(255,190,40,0)'); g.addColorStop(.5, 'rgba(255,200,70,' + (0.35 * alpha * pulse) + ')'); g.addColorStop(1, 'rgba(255,190,40,0)');
+  x.fillStyle = g; x.fillRect(cx - width * 1.6, top, width * 3.2, height);
+  // core
+  var c = x.createLinearGradient(cx - width / 2, 0, cx + width / 2, 0);
+  c.addColorStop(0, 'rgba(255,220,120,0)'); c.addColorStop(.3, 'rgba(255,230,150,' + (0.55 * alpha) + ')'); c.addColorStop(.5, 'rgba(255,255,245,' + (0.95 * alpha * pulse) + ')');
+  c.addColorStop(.7, 'rgba(255,230,150,' + (0.55 * alpha) + ')'); c.addColorStop(1, 'rgba(255,220,120,0)');
+  x.fillStyle = c; x.fillRect(cx - width / 2, top, width, height);
+  // fade the top
+  x.globalCompositeOperation = 'destination-out';
+  var f = x.createLinearGradient(0, top, 0, top + height * 0.45);
+  f.addColorStop(0, 'rgba(0,0,0,1)'); f.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = f; x.fillRect(cx - width * 1.7, top, width * 3.4, height * 0.45);
+  x.globalCompositeOperation = 'lighter';
+  // ground ring
+  var rg = x.createRadialGradient(cx, baseY, 0, cx, baseY, width * 1.8);
+  rg.addColorStop(0, 'rgba(255,245,200,' + (0.9 * alpha) + ')'); rg.addColorStop(.4, 'rgba(255,200,60,' + (0.45 * alpha) + ')'); rg.addColorStop(1, 'rgba(255,200,60,0)');
+  x.fillStyle = rg; x.beginPath(); x.ellipse(cx, baseY, width * 1.8, width * 0.45, 0, 0, Math.PI * 2); x.fill();
+  // rising sparks
+  if (parts) {
+    if (parts.length < 70 && Math.random() < 0.6) parts.push({ x: (Math.random() - .5) * width, y: 0, v: (0.6 + Math.random() * 1.6) * scale, r: (1 + Math.random() * 2.2) * scale, a: 1 });
+    for (var i = parts.length - 1; i >= 0; i--) {
+      var p = parts[i]; p.y += p.v; p.a -= 0.006;
+      if (p.a <= 0 || p.y > height) { parts.splice(i, 1); continue; }
+      x.fillStyle = 'rgba(255,240,190,' + (p.a * alpha) + ')';
+      x.beginPath(); x.arc(cx + p.x + Math.sin((t + i * 90) / 300) * 3, baseY - p.y, p.r, 0, Math.PI * 2); x.fill();
+    }
+  }
+  x.restore();
+}
+
+/* ---------- sensors ---------- */
+var smooth = null;
+function onOrient(e) {
+  var h = null;
+  if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) h = e.webkitCompassHeading;
+  else if (e.absolute && typeof e.alpha === 'number') h = (360 - e.alpha) % 360;
+  if (typeof e.beta === 'number') S.beta = S.beta * 0.8 + e.beta * 0.2;
+  if (h == null) return;
+  if (smooth == null) smooth = h; else smooth = (smooth + angDiff(h, smooth) * 0.25 + 360) % 360;
+  S.heading = smooth;
+}
+function startOrientation() {
+  var D = window.DeviceOrientationEvent;
+  function attach() {
+    addEventListener('deviceorientationabsolute', onOrient, true);
+    addEventListener('deviceorientation', onOrient, true);
+  }
+  if (D && typeof D.requestPermission === 'function') {
+    return D.requestPermission().then(function (r) { if (r === 'granted') attach(); else err('Compass permission was declined, so the arrow and beam can’t follow your phone. Reload to try again.'); }).catch(function () { attach(); });
+  }
+  attach(); return Promise.resolve();
+}
+function onFix(p) {
+  var c = p.coords, me = { lat: c.latitude, lng: c.longitude };
+  S.acc = c.accuracy || 30;
+  if (S.lastFix) {
+    var m = dist(S.lastFix, me);
+    if (m > Math.max(4, Math.min(S.acc, 25) * 0.6) && m < 80) { S.walked += m; S.course = bearing(S.lastFix, me); S.lastFix = me; }
+    else if (m >= 80) S.lastFix = me;
+  } else S.lastFix = me;
+  S.me = me;
+  if (!S.placed) {
+    S.placed = true;
+    var km = S.drop ? dist(me, S.drop) : 1e9;
+    if (km < 60 || km > 450) placeDrop(150, 320);
+  }
+  tick();
+}
+function startGeo() {
+  if (SIM) return;
+  if (!navigator.geolocation) return err('This browser has no location.');
+  navigator.geolocation.watchPosition(onFix, function (e) {
+    err(e.code === 1 ? 'Location is off for this page. Settings > Privacy > Location Services > Safari Websites > While Using.' : 'Waiting for GPS…');
+  }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+}
+/* Drops land on real park paths (OpenStreetMap park footpaths, the JF Go candidate set).
+   Prefer one ahead of the way you're walking; otherwise the one nearest the middle of the band. */
+function placeDrop(lo, hi) {
+  var P = window.JFGO_PARKS, best = null, bestScore = 1e9, ahead = S.course != null ? S.course : S.heading;
+  if (P && S.me) {
+    for (var i = 0; i < P.pts.length; i++) {
+      var q = { lat: P.pts[i][0], lng: P.pts[i][1] }, m = dist(S.me, q);
+      if (m < lo || m > hi) continue;
+      var score = Math.abs(m - (lo + hi) / 2);
+      if (ahead != null) score += Math.abs(angDiff(bearing(S.me, q), ahead)) * 2.2;
+      if (S.drop && dist(S.drop, q) < 60) score += 500;
+      if (score < bestScore) { bestScore = score; best = { p: q, n: P.names[P.pts[i][2]] }; }
+    }
+  }
+  if (best) { S.drop = best.p; S.park = best.n; }
+  else { S.drop = offset(S.me, ahead != null ? ahead : Math.random() * 360, (lo + hi) / 2); S.park = 'just ahead of you'; }
+  S.startAt = Date.now(); S.walked = 0;
+  if (dropMarker) { dropMarker.setLatLng([S.drop.lat, S.drop.lng]); line.setLatLngs([[S.me.lat, S.me.lng], [S.drop.lat, S.drop.lng]]); }
+}
+
+/* ---------- map ---------- */
+var map, meMarker, dropMarker, accCircle, line, followMe = true;
+function startMap() {
+  if (map) return;
+  map = L.map('map', { zoomControl: false, attributionControl: true });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  var c = S.me || S.drop || { lat: -37.637, lng: 144.886 };
+  map.setView([c.lat, c.lng], 17);
+  map.on('dragstart', function () { followMe = false; });
+  $('recenter').onclick = function () { followMe = true; fit(); };
+}
+function fit() {
+  if (!map || !S.me || !S.drop) return;
+  map.fitBounds(L.latLngBounds([[S.me.lat, S.me.lng], [S.drop.lat, S.drop.lng]]), { padding: [60, 60], maxZoom: 18 });
+}
+function drawMap() {
+  if (!map || !S.me || !S.drop) return;
+  var me = [S.me.lat, S.me.lng], d = [S.drop.lat, S.drop.lng];
+  if (!meMarker) {
+    meMarker = L.marker(me, { icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000 }).addTo(map);
+    accCircle = L.circle(me, { radius: S.acc, color: '#2f6bff', weight: 0, fillOpacity: .08 }).addTo(map);
+    dropMarker = L.marker(d, { icon: L.divIcon({ className: '', html: '<div class="drop-pin"></div>', iconSize: [34, 34], iconAnchor: [17, 17] }) }).addTo(map);
+    line = L.polyline([me, d], { color: '#2f6bff', weight: 3, dashArray: '2 8', lineCap: 'round' }).addTo(map);
+    fit();
+  } else {
+    meMarker.setLatLng(me); accCircle.setLatLng(me); accCircle.setRadius(Math.min(S.acc, 80));
+    dropMarker.setLatLng(d); line.setLatLngs([me, d]);
+    if (followMe) { var b = map.getBounds(); if (!b.contains(me) || !b.contains(d)) fit(); }
+  }
+}
+
+/* ---------- hunt UI ---------- */
+function tick() {
+  if (!S.me || !S.drop) return;
+  var m = dist(S.me, S.drop), b = bearing(S.me, S.drop);
+  S.m = m; S.b = b;
+  $('dist').textContent = fmtM(m);
+  $('distSub').textContent = S.park ? (S.park === 'just ahead of you' ? 'Just ahead of you' : 'In ' + S.park) : 'To the drop';
+  $('sWalked').textContent = fmtM(S.walked);
+  $('sSteps').textContent = steps(S.walked).toLocaleString();
+  var hint;
+  if (m <= CATCH_M + 10) hint = 'You’re there. Open the camera and look for the light.';
+  else if (m <= 150) hint = 'Close. The beam shows in your camera from here.';
+  else hint = 'Follow the arrow. The beam shows in your camera from 150 m.';
+  $('huntHint').textContent = hint;
+  $('camBtn').textContent = m <= CATCH_M + 10 ? 'Open camera · grab it' : 'Open camera';
+  $('camBtn').className = 'cta ' + (m <= CATCH_M + 10 ? 'gold' : 'blue');
+  drawMap();
+}
+setInterval(function () {
+  $('sTime').textContent = fmtT(Date.now() - S.startAt);
+  if (S.screen === 'hunt' && S.b != null) {
+    var rot = S.heading == null ? S.b : angDiff(S.b, S.heading);
+    $('arrow').style.transform = 'rotate(' + rot + 'deg)';
+  }
+}, 250);
+
+/* ---------- camera ---------- */
+var stream = null, ov = $('overlay'), ox = ov.getContext('2d'), camParts = [], rafOn = false;
+function sizeOv() { var r = devicePixelRatio || 1; ov.width = innerWidth * r; ov.height = innerHeight * r; }
+addEventListener('resize', sizeOv); sizeOv();
+function openCam() {
+  show('cam');
+  $('reward').classList.remove('on');
+  S.collected = false;
+  var v = $('video');
+  if (!stream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && !SIM) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+      .then(function (s) { stream = s; v.srcObject = s; v.play().catch(function () {}); })
+      .catch(function () { err('Camera permission was declined. Settings > Safari > Camera > Allow, then reload.'); });
+  } else if (stream) { v.srcObject = stream; v.play().catch(function () {}); }
+  if (!rafOn) { rafOn = true; requestAnimationFrame(frame); }
+}
+function closeCam() {
+  show('hunt');
+  if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+  setTimeout(function () { map && map.invalidateSize(); }, 50);
+}
+function frame(t) {
+  if (S.screen !== 'cam') { rafOn = false; return; }
+  requestAnimationFrame(frame);
+  var r = devicePixelRatio || 1, w = ov.width, h = ov.height;
+  ox.clearRect(0, 0, w, h);
+  if (!S.me || !S.drop) { $('camHint').textContent = 'Finding you…'; return; }
+  var m = dist(S.me, S.drop), b = bearing(S.me, S.drop);
+  $('camDist').innerHTML = fmtM(m) + ' <small>' + (m <= CATCH_M ? 'you’re there' : 'to the drop') + '</small>';
+  var head = S.heading == null ? b : S.heading;
+  var diff = angDiff(b, head);
+  var pxDeg = w / HFOV, pxDegV = h / VFOV;
+  var x = w / 2 + diff * pxDeg;
+  var horizon = h / 2 + (S.beta - 90) * pxDegV;
+  var below = deg(Math.atan(CAMERA_H / Math.max(m, 3)));
+  var baseY = horizon + below * pxDegV;
+  var angW = deg(Math.atan(2.2 / Math.max(m, 2)));
+  var bw = Math.max(10 * r, Math.min(w * 0.42, angW * pxDeg));
+  var alpha = m > 600 ? 0.35 : (m > 150 ? 0.6 : 1);
+  var onScreen = Math.abs(diff) < HFOV / 2 + 6;
+  if (onScreen) drawBeam(ox, x, Math.min(baseY, h * 1.4), bw, Math.max(h * 1.2, baseY + h * 0.3), alpha, t, camParts, r);
+  $('edgeL').style.display = !onScreen && diff < 0 ? 'block' : 'none';
+  $('edgeR').style.display = !onScreen && diff > 0 ? 'block' : 'none';
+  // the dumbbell
+  var bell = $('bell');
+  if (m <= BELL_SHOW_M && onScreen && !S.collected) {
+    var size = Math.max(150, Math.min(270, deg(Math.atan(0.9 / Math.max(m, 1.5))) * pxDeg / r));
+    bell.style.display = 'block';
+    bell.style.width = bell.style.height = size + 'px';
+    bell.style.margin = (-size / 2) + 'px 0 0 ' + (-size / 2) + 'px';
+    var by = Math.min(baseY / r - size * 0.35, innerHeight - size * 0.7 - 80);
+    bell.style.transform = 'translate(' + (x / r) + 'px,' + Math.max(size, by) + 'px)';
+    bell.classList.toggle('ready', m <= CATCH_M);
+  } else bell.style.display = 'none';
+  var hint;
+  if (S.collected) hint = '';
+  else if (S.heading == null && !SIM) hint = 'Compass not ready. Move your phone in a figure 8.';
+  else if (!onScreen) hint = diff < 0 ? 'Turn left' : 'Turn right';
+  else if (m > BELL_SHOW_M) hint = 'Walk towards the light';
+  else if (m > CATCH_M) hint = 'Almost. Keep walking to the light';
+  else hint = 'Tap the dumbbell';
+  $('camHint').textContent = hint;
+}
+$('bell').addEventListener('click', function (e) {
+  if (S.collected) return;
+  if (S.m > CATCH_M) { $('camHint').textContent = 'Get a bit closer: ' + fmtM(S.m - CATCH_M) + ' to go'; return; }
+  collect(e);
+});
+function collect(e) {
+  S.collected = true;
+  var bell = $('bell'), rect = bell.getBoundingClientRect();
+  bell.style.display = 'none';
+  var fl = $('flash'); fl.style.setProperty('--fx', (rect.left + rect.width / 2) + 'px'); fl.style.setProperty('--fy', (rect.top + rect.height / 2) + 'px');
+  fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
+  burst(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  var fly = $('fly'); fly.style.display = 'block';
+  fly.style.width = fly.style.height = rect.width + 'px'; fly.style.margin = (-rect.width / 2) + 'px 0 0 ' + (-rect.width / 2) + 'px';
+  fly.style.left = '0'; fly.style.top = '0';
+  var sx = rect.left + rect.width / 2, sy = rect.top + rect.height / 2, ex = innerWidth / 2, ey = innerHeight - 260;
+  fly.animate([
+    { transform: 'translate(' + sx + 'px,' + sy + 'px) scale(1) rotate(0deg)', opacity: 1 },
+    { transform: 'translate(' + ((sx + ex) / 2) + 'px,' + (Math.min(sy, ey) - 140) + 'px) scale(1.6) rotate(200deg)', opacity: 1, offset: .5 },
+    { transform: 'translate(' + ex + 'px,' + ey + 'px) scale(.35) rotate(360deg)', opacity: 0 }
+  ], { duration: 1100, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'forwards' });
+  if (navigator.vibrate) navigator.vibrate([30, 40, 60]);
+  var took = Date.now() - S.startAt;
+  setTimeout(function () {
+    $('rWalked').textContent = fmtM(S.walked);
+    $('rSteps').textContent = steps(S.walked).toLocaleString();
+    $('rTime').textContent = fmtT(took);
+    var n = Number(localStorage.getItem('jfgo-ar-count') || 0) + 1; localStorage.setItem('jfgo-ar-count', n);
+    $('rewardSub').textContent = '+25 JF Go points · ' + (n === 1 ? 'your first find' : n + ' finds so far');
+    $('reward').classList.add('on');
+    fly.style.display = 'none';
+  }, 1000);
+}
+var burstParts = [];
+function burst(cx, cy) {
+  var r = devicePixelRatio || 1;
+  for (var i = 0; i < 90; i++) {
+    var a = Math.random() * Math.PI * 2, s = (3 + Math.random() * 9) * r;
+    burstParts.push({ x: cx * r, y: cy * r, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 3 * r, life: 1, r: (2 + Math.random() * 4) * r, c: Math.random() < .5 ? '255,215,90' : '255,250,230' });
+  }
+  if (!burst.on) { burst.on = true; requestAnimationFrame(stepBurst); }
+}
+function stepBurst() {
+  if (!burstParts.length) { burst.on = false; return; }
+  requestAnimationFrame(stepBurst);
+  ox.save(); ox.globalCompositeOperation = 'lighter';
+  for (var i = burstParts.length - 1; i >= 0; i--) {
+    var p = burstParts[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.25; p.vx *= .98; p.life -= 0.016;
+    if (p.life <= 0) { burstParts.splice(i, 1); continue; }
+    ox.fillStyle = 'rgba(' + p.c + ',' + p.life + ')'; ox.beginPath(); ox.arc(p.x, p.y, p.r * p.life + 1, 0, Math.PI * 2); ox.fill();
+  }
+  ox.restore();
+}
+
+/* ---------- screens + buttons ---------- */
+function show(id) {
+  S.screen = id;
+  ['intro', 'hunt', 'cam'].forEach(function (k) { $(k).classList.toggle('on', k === id); });
+}
+$('startBtn').onclick = function () {
+  startOrientation().then(function () {
+    startGeo();
+    show('hunt'); startMap(); tick();
+    setTimeout(function () { map.invalidateSize(); fit(); }, 80);
+  });
+};
+$('camBtn').onclick = openCam;
+$('camClose').onclick = closeCam;
+$('doneBtn').onclick = function () { closeCam(); };
+$('againBtn').onclick = function () { placeDrop(160, 380); closeCam(); tick(); fit(); };
+
+/* intro copy */
+$('introTitle').textContent = WHO + ', something dropped nearby';
+if (S.park) $('introLead').innerHTML = 'A <b>Golden Dumbbell</b> just landed in <b>' + S.park.replace(/[<>&]/g, '') + '</b>. Walk to it, find the beam of light through your camera and grab it.';
+
+/* test hooks (headless checks only) */
+window.__jfgo = { S: S, onFix: onFix, onOrient: onOrient, show: show, openCam: openCam, tick: tick, startMap: startMap, collect: collect };
+})();
+</script>
+</body>
+</html>
